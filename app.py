@@ -37,6 +37,8 @@ class User(UserMixin, db.Model):
 class Group(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
+    creator_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    creator = db.relationship('User', backref='created_groups')
     members = db.relationship('User', secondary='user_groups', back_populates='groups')
     expenses = db.relationship('Expense', back_populates='group')
 
@@ -123,7 +125,7 @@ def dashboard():
 def create_group():
     if request.method == 'POST':
         group_name = request.form['group_name']
-        new_group = Group(name=group_name)
+        new_group = Group(name=group_name, creator=current_user)
         new_group.members.append(current_user)
         db.session.add(new_group)
         db.session.commit()
@@ -164,6 +166,64 @@ def group_details(group_id):
     
     return render_template('group_details.html', group=group, expenses=expenses)
 
+@app.route('/group/<int:group_id>/members', methods=['GET', 'POST'])
+@login_required
+def manage_members(group_id):
+    group = Group.query.get_or_404(group_id)
+    
+    # Check if user is group creator
+    if group.creator != current_user:
+        flash('Only the group creator can add members.', 'danger')
+        return redirect(url_for('group_details', group_id=group_id))
+    
+    if request.method == 'POST':
+        email = request.form.get('email')
+        if not email:
+            flash('Please provide an email address.', 'danger')
+            return redirect(url_for('manage_members', group_id=group_id))
+        
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            flash('No user found with that email address.', 'danger')
+            return redirect(url_for('manage_members', group_id=group_id))
+        
+        if user in group.members:
+            flash('User is already a member of this group.', 'warning')
+            return redirect(url_for('manage_members', group_id=group_id))
+        
+        group.members.append(user)
+        db.session.commit()
+        flash(f'{user.email} has been added to the group.', 'success')
+        return redirect(url_for('manage_members', group_id=group_id))
+    
+    return render_template('add_members.html', group=group)
+
+@app.route('/group/<int:group_id>/remove/<int:user_id>', methods=['POST'])
+@login_required
+def remove_member(group_id, user_id):
+    group = Group.query.get_or_404(group_id)
+    
+    # Check if user is group creator
+    if group.creator != current_user:
+        flash('Only the group creator can remove members.', 'danger')
+        return redirect(url_for('group_details', group_id=group_id))
+    
+    user = User.query.get_or_404(user_id)
+    
+    # Prevent removing the creator
+    if user == group.creator:
+        flash('Cannot remove the group creator.', 'danger')
+        return redirect(url_for('manage_members', group_id=group_id))
+    
+    if user not in group.members:
+        flash('User is not a member of this group.', 'danger')
+        return redirect(url_for('manage_members', group_id=group_id))
+    
+    group.members.remove(user)
+    db.session.commit()
+    flash(f'{user.email} has been removed from the group.', 'success')
+    return redirect(url_for('manage_members', group_id=group_id))
+
 # Utility function to calculate balances
 def calculate_group_balances(group):
     balances = {}
@@ -198,10 +258,13 @@ def group_balances(group_id):
     return render_template('group_balances.html', group=group, balances=balances)
 
 # Initialize database
-@app.cli.command('init-db')
 def init_db():
-    db.create_all()
-    print('Database initialized!')
+    with app.app_context():
+        # Drop all tables
+        db.drop_all()
+        # Create all tables
+        db.create_all()
+        print("Database initialized successfully!")
 
 if __name__ == '__main__':
     app.run(host='localhost', port=5001, debug=True)

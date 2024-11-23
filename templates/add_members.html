@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Add Members - {{ group.name }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="text-center">Add Members to {{ group.name }}</h2>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Member Email</label>
+                            <input type="email" class="form-control" id="email" name="email" required>
+                            <div class="form-text">Enter the email address of the user you want to add</div>
+                        </div>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">Add Member</button>
+                        </div>
+                    </form>
+
+                    <hr>
+
+                    <h3 class="mt-4">Current Members</h3>
+                    <ul class="list-group">
+                        {% for member in group.members %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ member.email }}
+                            {% if member != group.creator %}
+                            <form method="POST" action="{{ url_for('remove_member', group_id=group.id, user_id=member.id) }}" style="display: inline;">
+                                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to remove this member?')">
+                                    Remove
+                                </button>
+                            </form>
+                            {% else %}
+                            <span class="badge bg-primary">Creator</span>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
