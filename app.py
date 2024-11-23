@@ -24,6 +24,9 @@ db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
+login_manager.login_message = 'Please log in to access this page.'
+login_manager.login_message_category = 'info'
+login_manager.login_view = 'login'
 
 # Models
 class User(UserMixin, db.Model):
@@ -76,6 +79,8 @@ def load_user(user_id):
 # Routes
 @app.route('/')
 def index():
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
     return render_template('index.html')
 
 @app.route('/register', methods=['GET', 'POST'])
