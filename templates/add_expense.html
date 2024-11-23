@@ -4,18 +4,19 @@
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-6">
+    <div class="col-md-8">
         <div class="card">
             <div class="card-header">
                 <h2 class="text-center">Add Expense to {{ group.name }}</h2>
             </div>
             <div class="card-body">
-                <form method="POST">
+                <form method="POST" id="expenseForm">
                     <div class="mb-3">
                         <label for="description" class="form-label">Description</label>
                         <input type="text" class="form-control" id="description" name="description" required>
                         <small class="form-text text-muted">What was this expense for?</small>
                     </div>
+                    
                     <div class="mb-3">
                         <label for="amount" class="form-label">Amount</label>
                         <div class="input-group">
@@ -23,6 +24,53 @@
                             <input type="number" step="0.01" min="0" class="form-control" id="amount" name="amount" required>
                         </div>
                     </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Split Type</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="split_type" id="equalSplit" value="equal" checked>
+                            <label class="form-check-label" for="equalSplit">
+                                Equal Split
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="split_type" id="customSplit" value="custom">
+                            <label class="form-check-label" for="customSplit">
+                                Custom Split
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="equalSplitInfo" class="mb-3">
+                        <div class="alert alert-info">
+                            The amount will be split equally among all members:
+                            <ul class="mb-0">
+                                {% for member in group.members %}
+                                <li>{{ member.username }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div id="customSplitFields" class="mb-3" style="display: none;">
+                        <label class="form-label">Custom Split Amounts</label>
+                        {% for member in group.members %}
+                        <div class="mb-2">
+                            <label class="form-label">{{ member.username }}</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" step="0.01" min="0" 
+                                       class="form-control custom-share" 
+                                       name="share_{{ member.id }}" 
+                                       data-username="{{ member.username }}">
+                            </div>
+                        </div>
+                        {% endfor %}
+                        <div id="splitTotal" class="alert alert-info mt-2">
+                            Total Split: $<span id="currentTotal">0.00</span>
+                        </div>
+                    </div>
+
                     <div class="d-grid">
                         <button type="submit" class="btn btn-primary">Add Expense</button>
                     </div>
@@ -31,4 +79,42 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const equalSplit = document.getElementById('equalSplit');
+    const customSplit = document.getElementById('customSplit');
+    const equalSplitInfo = document.getElementById('equalSplitInfo');
+    const customSplitFields = document.getElementById('customSplitFields');
+    const customShares = document.querySelectorAll('.custom-share');
+    const currentTotal = document.getElementById('currentTotal');
+
+    // Toggle split type fields
+    function toggleSplitFields() {
+        if (equalSplit.checked) {
+            equalSplitInfo.style.display = 'block';
+            customSplitFields.style.display = 'none';
+        } else {
+            equalSplitInfo.style.display = 'none';
+            customSplitFields.style.display = 'block';
+        }
+    }
+
+    equalSplit.addEventListener('change', toggleSplitFields);
+    customSplit.addEventListener('change', toggleSplitFields);
+
+    // Update custom split totals
+    function updateSplitTotal() {
+        let total = 0;
+        customShares.forEach(input => {
+            total += parseFloat(input.value || 0);
+        });
+        currentTotal.textContent = total.toFixed(2);
+    }
+
+    customShares.forEach(input => {
+        input.addEventListener('input', updateSplitTotal);
+    });
+});
+</script>
 {% endblock %}

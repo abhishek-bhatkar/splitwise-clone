@@ -49,8 +49,19 @@ class Expense(db.Model):
     date = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp())
     payer_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     group_id = db.Column(db.Integer, db.ForeignKey('group.id'), nullable=False)
+    split_type = db.Column(db.String(20), nullable=False, default='equal')  # 'equal' or 'custom'
     payer = db.relationship('User', back_populates='expenses')
     group = db.relationship('Group', back_populates='expenses')
+    shares = db.relationship('ExpenseShare', back_populates='expense', cascade='all, delete-orphan')
+
+class ExpenseShare(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    expense_id = db.Column(db.Integer, db.ForeignKey('expense.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    share_amount = db.Column(db.Float, nullable=False)
+    paid = db.Column(db.Boolean, default=False)
+    expense = db.relationship('Expense', back_populates='shares')
+    user = db.relationship('User')
 
 # Association tables
 user_groups = db.Table('user_groups',
@@ -135,25 +146,51 @@ def create_group():
     
     return render_template('create_group.html')
 
-@app.route('/add_expense/<int:group_id>', methods=['GET', 'POST'])
+@app.route('/group/<int:group_id>/add_expense', methods=['GET', 'POST'])
 @login_required
 def add_expense(group_id):
     group = Group.query.get_or_404(group_id)
-    
     if request.method == 'POST':
         description = request.form['description']
         amount = float(request.form['amount'])
+        split_type = request.form.get('split_type', 'equal')
         
-        new_expense = Expense(
-            description=description, 
-            amount=amount, 
-            payer=current_user, 
-            group=group
+        # Create the expense
+        expense = Expense(
+            description=description,
+            amount=amount,
+            payer=current_user,
+            group=group,
+            split_type=split_type
         )
-        db.session.add(new_expense)
-        db.session.commit()
+        db.session.add(expense)
         
-        flash('Expense added successfully!')
+        # Calculate and create shares
+        if split_type == 'equal':
+            per_person_share = amount / len(group.members)
+            for member in group.members:
+                share = ExpenseShare(
+                    expense=expense,
+                    user=member,
+                    share_amount=per_person_share,
+                    paid=(member == current_user)  # Payer's share is marked as paid
+                )
+                db.session.add(share)
+        else:
+            # Handle custom splits
+            for member in group.members:
+                share_amount = float(request.form.get(f'share_{member.id}', 0))
+                if share_amount > 0:
+                    share = ExpenseShare(
+                        expense=expense,
+                        user=member,
+                        share_amount=share_amount,
+                        paid=(member == current_user)
+                    )
+                    db.session.add(share)
+        
+        db.session.commit()
+        flash('Expense added successfully!', 'success')
         return redirect(url_for('group_details', group_id=group_id))
     
     return render_template('add_expense.html', group=group)
@@ -227,25 +264,61 @@ def remove_member(group_id, user_id):
 # Utility function to calculate balances
 def calculate_group_balances(group):
     balances = {}
-    total_expenses = {}
     
-    # Calculate total expenses per user
+    # Initialize balances for all members
+    for member in group.members:
+        balances[member.username] = {
+            'paid': 0,      # Total amount paid by this user
+            'owed': 0,      # Total amount this user owes to others
+            'owed_by': {},  # Detailed breakdown of who owes this user
+            'owes_to': {}   # Detailed breakdown of whom this user owes
+        }
+    
+    # Calculate balances from expense shares
     for expense in group.expenses:
         payer = expense.payer
-        if payer.id not in total_expenses:
-            total_expenses[payer.id] = 0
-        total_expenses[payer.id] += expense.amount
+        payer_username = payer.username
+        
+        # Add to total paid amount for the payer
+        balances[payer_username]['paid'] += expense.amount
+        
+        # Process each share
+        for share in expense.shares:
+            user = share.user
+            username = user.username
+            
+            if user != payer:
+                # Update amount owed to payer
+                if payer_username not in balances[username]['owes_to']:
+                    balances[username]['owes_to'][payer_username] = 0
+                balances[username]['owes_to'][payer_username] += share.share_amount
+                
+                # Update amount owed by others to payer
+                if username not in balances[payer_username]['owed_by']:
+                    balances[payer_username]['owed_by'][username] = 0
+                balances[payer_username]['owed_by'][username] += share.share_amount
+                
+                # Update total owed amounts
+                balances[username]['owed'] += share.share_amount
     
-    # Calculate each member's share
-    total_group_expense = sum(total_expenses.values())
-    members_count = len(group.members)
-    per_person_share = total_group_expense / members_count
-    
-    # Calculate individual balances
-    for member in group.members:
-        member_total_paid = total_expenses.get(member.id, 0)
-        balance = member_total_paid - per_person_share
-        balances[member.username] = round(balance, 2)
+    # Calculate net balance for each user
+    for username in balances:
+        balances[username]['net'] = round(
+            balances[username]['paid'] - balances[username]['owed'], 
+            2
+        )
+        
+        # Round all the detailed amounts
+        for other_user in balances[username]['owes_to']:
+            balances[username]['owes_to'][other_user] = round(
+                balances[username]['owes_to'][other_user], 
+                2
+            )
+        for other_user in balances[username]['owed_by']:
+            balances[username]['owed_by'][other_user] = round(
+                balances[username]['owed_by'][other_user], 
+                2
+            )
     
     return balances
 
