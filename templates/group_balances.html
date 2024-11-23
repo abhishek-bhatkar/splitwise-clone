@@ -22,7 +22,7 @@
                         {% for username, balance in balances.items() %}
                             <tr {% if balance > 0 %}class="table-success"{% elif balance < 0 %}class="table-danger"{% endif %}>
                                 <td>{{ username }}</td>
-                                <td>${{ "%.2f"|format(abs(balance)) }}</td>
+                                <td>${{ "%.2f"|format(balance|abs) }}</td>
                                 <td>
                                     {% if balance > 0 %}
                                         Owed
