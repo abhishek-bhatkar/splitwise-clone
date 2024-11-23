@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}Welcome to Splitwise{% endblock %}
+
+{% block content %}
+<div class="text-center">
+    <h1 class="display-4 mb-4">Welcome to Splitwise</h1>
+    <p class="lead mb-5">Easily split bills and track expenses with friends and groups.</p>
+    
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg w-100">Login</a>
+        </div>
+        <div class="col-md-6 mb-3">
+            <a href="{{ url_for('register') }}" class="btn btn-outline-primary btn-lg w-100">Register</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h2 class="mb-4">Welcome, {{ user.username }}!</h2>
+        
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4>Your Groups</h4>
+                <a href="{{ url_for('create_group') }}" class="btn btn-sm btn-primary">Create Group</a>
+            </div>
+            <div class="card-body">
+                {% if user.groups %}
+                    <div class="list-group">
+                        {% for group in user.groups %}
+                            <a href="{{ url_for('group_details', group_id=group.id) }}" class="list-group-item list-group-item-action">
+                                {{ group.name }}
+                                <span class="badge bg-secondary float-end">{{ group.expenses|length }} Expenses</span>
+                            </a>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted">You haven't joined any groups yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h4>Quick Actions</h4>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('create_group') }}" class="btn btn-outline-primary">Create New Group</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
